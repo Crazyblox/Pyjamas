@@ -6,67 +6,103 @@ The primary example of this being applied in practice is the 'penumbra' Luau gra
 
 Link: https://github.com/Crazyblox/Penumbra
 
-# Project directory layout:
+-----
+
+# Setting up a Pajamas Project
+
+Setting up a pajamas project may differ platform to platform, but the main project layout should be the same:
+
+**ProjectFolder**:
+
 	 ┣━ .pajamasrc.luau
 	 ┗━ init.luau
-	 
-# Explained:
-### .pajamasrc.luau:
-The Pajamas runtime starts validating a Pajamas project by looking for this file.
 
+## Explained:
+
+### `.pajamasrc.luau`:
+
+A Pajamas runtime provider starts validating a Pajamas project by looking for this file.
 It contains project details, launch parameter options, and specific runtime configuration.
+To ensure consistency, this file must exist on all runtime providers and its schema must not change.
 
-
-
-### Starting a pajamas project:
-A project must be sat directly as a child of `pajamas/`, maintaining a siblance with the `/plugin` directory in order to be able to function as intended and interface appropriately within the host's environment.
-
-When pajamas is told to initalise a project, it will first look for the `/.pajamasrc.luau` module, which contains information relevant to how the project should be run:
-Example:
 ```luau
 return {
-	schema = "0.0.2",
-	project = {
+	schema = "0.0.2", -- Schema version
+	project = { -- Your project details
 		name = "Penumbra",
 		author = "Crazyblox",
 		version = "26.04.0",
 		launch_note = "Thanks for using Penumbra! Contributions & reports are welcome at https://github.com/Crazyblox/Penumbra"
 	},
-	runtime = {
-		default =	{ run = true },
-		roblox =	{ run_server = false, run_client = true }
+	runtime = { -- Runtime provider configuration
+		roblox = { run_server = false, run_client = true } -- Each runtime provider may present different options here.
 	},
-	plugin = {
-		-- Possibly redundant for runtime purposes.
-		["display"] =	{ include = true },
-		["event"] =		{ include = true },
-		["input"] =		{ include = true },
-		["task"] =		{ include = true },
-		["vm"] =		{ include = true }
+	libraries = { -- Built-in shared libraries
+		["input"] = { include = false }, -- If include is set to false, then Pajamas will not initialize the said library automatically.
+		["task"] = { include = true }
 	},
-	params = {
-		-- 'input' is used to sanitise & assert type input.
-		-- 'input' value is derived from 'default' if not declared.
-		-- 'default' value is used as a fallback if no launch parameter is supplied.
-		[1] = { name = "Path",		input = "string" },
-		[2] = { name = "X", 		default = 320 },
-		[3] = { name = "Y", 		default = 240 },
-		[4] = { name = "Threads", 	default = 1 },
-		[5] = { name = "Resample", 	default = true },
-		[6] = { name = "RenderNum", default = -1 }
-	}
+	main = "path/to/penumbra_init" -- The location of the init.luau file, or similar. This file will be ran when the project starts.
 }
 ```
 
-Once `/.pajamasrc.luau` is validated, it will then look to run the project's `/init.luau` module. At that point, pajamas has done its job, and the given project would begin to run.
+### `init.luau`:
 
-Any time a new process is spawned, including on initial project startup and when a new process is created via `/plugin/process.luau`, `/init.luau` will be passed and called in order to intialise the new process.
+This is the entry point of your pajamas project. While the location of this file can be changed, it is required that you define the location of this file in your `.pajamasrc.luau` file, otherwise your project will not run. This file must also return a function.
 
-Pajamas does NOT need to be initialised multiple times via new processes. Only 1 process should be responsible for communicating with and handling pajamas itself.
+It is heavily recommended that you place your project folder as a child under the `Pajamas/Projects` directory, as you'll be able to easily access the main Pajamas API. It also gives your project more consistency across platforms.
 
-### The point of plugins:
-Plugin modules are intended to handle interfacing with the Luau runtime the project is running on, enabling all Luau code within a given project to not depend on runtime instrinsics.
+-----
 
-The goal is that, by deferring requirements for running on different platforms down to a specific set of plugin modules, developers would find themselves writing code where their logic is wholly separate from the environment they developed it in, allowing for more portability and giving Luau more opportunity for growth.
+# Running a pajamas project:
 
-For example, Roblox/Lune's 'task' standard library would be returned under a simple plugin module, ensuring Luau purity for init and library modules and allowing other runtimes to provide their own version of 'task' when a standard library isn't provided.
+## Runtime Providers
+
+Like it has been mentioned above, Pajamas allows you to run your Luau projects in a platform-agnostic manner, which is done through runtime providers.
+
+A runtime provider is the middleman between the runtime and your project. It setups your project, and initializes the libraries that you included within your project. It handles everything related to the runtime for your project, so you don't need to interact with the runtime directly yourself.
+
+This way, your Luau project can be ported to different platforms with ease, and you only need to initialize the provider for a runtime you wish to port your project to.
+
+## Runtime Objects
+
+After setting up your project, to run it, you must first create a runtime object with a runtime provider. A runtime object is used to initialize and run projects per runtime. In the examples below, you can see how this is done.
+
+## Setting up a project on Roblox
+
+```luau
+local Pajamas = require("@Pajamas")
+local RobloxProvider = require("@Pajamas/RuntimeProviders/Roblox")
+Pajamas.registerRuntimeProvider("Roblox", RobloxProvider)
+
+local Runtime = Pajamas.runtime("Roblox")
+Runtime:init(script.Parent, "Test!")
+```
+
+## Setting up a project on another platform
+
+```luau
+local Pajamas = require("@Pajamas")
+local TestProvider = require("@Pajamas/RuntimeProviders/Test")
+Pajamas.registerRuntimeProvider("Test", TestProvider)
+
+local Runtime = Pajamas.runtime("Test")
+Runtime:init("path/to/project/folder", "Test!")
+```
+
+Using the `Pajamas.registerRuntimeProvider(runtimeName: string, provider: (...any) -> ())` API, you first register a runtime provider to Pajamas. This stores the provider internally, and makes it ready to be used in runtime objects.
+
+To create a runtime object, you use the `Pajamas.runtime(runtimeName: string)` API. This returns a runtime object from the provider that you have registered on the same name. Runtime objects are cached, meaning, if you use this function with the same runtime name multiple times, it will just return the already existing runtime object.
+
+After creating a runtime object, you must then initialize a project on this runtime. Using the `Runtime:init(projectLocation: any, ...)` method, you initialize and run a project on this runtime. The first parameter of this function tells the provider where your project is. This can change depending on the platform you wish to use Pajamas on. Any parameters after the location will be directly given to your project.
+
+It is also possible to initialize multiple projects on the same runtime with runtime objects.
+
+-----
+
+# Shared Libraries
+
+Pajamas comes with a set of shared libraries that are intended to handle interfacing with the Luau runtime the project is running on. This enables a Pajamas project to not depend on runtime specific APIs and functions.
+
+The goal is that, by deferring requirements for running on different platforms down to a specific set of shared libraries, developers would find themselves writing code where their logic is wholly separate from the environment they developed it in, allowing for more portability and giving Luau more opportunity for growth.
+
+To access these libraries, Pajamas provides the `Pajamas.getLibrary(libraryName: string)` function. Using this, you can access all available shared libraries that Pajamas provides. Do note that if a library has not been included within the `.pajamasrc.luau` file, it will not come initialized for your runtime. This is done so developers can select which libraries that their project needs, removing accidental bloat.

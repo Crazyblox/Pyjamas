@@ -9,3 +9,6 @@
 # Extensions
 *.log
 *.tmp
+
+# Selene
+selene.toml

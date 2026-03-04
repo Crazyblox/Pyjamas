@@ -5,7 +5,7 @@
 
     "ReplicatedStorage": {
       "Pajamas": {
-        "$path": "Roblox"
+        "$path": "src"
       }
     }
   }
